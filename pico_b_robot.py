@@ -88,9 +88,9 @@ def drive_motors(joyvals):
     y = jsy * 10
     z = jsz * 5
 
-    m1_spd = -x-z
+    m1_spd = x-z
     m2_spd = y+z
-    m3_spd = -x+z
+    m3_spd = x+z
     m4_spd = y-z
 
     mtr1(m1_spd)
