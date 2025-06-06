@@ -1,4 +1,4 @@
-# Replace IR remote control [Adeept Mecanum Wheel Robotic Car](https://www.amazon.com/Adeept-Omni-Directional-Raspberry-Controlled-Educational/dp/B0BF5GVJK8?ref_=ast_sto_dp) with [3-axis Joystick](https://a.co/d/4GYH1ec) control.
+# Replace IR remote control for [Adeept Mecanum Wheel Robotic Car](https://www.amazon.com/Adeept-Omni-Directional-Raspberry-Controlled-Educational/dp/B0BF5GVJK8?ref_=ast_sto_dp) with [3-axis Joystick](https://a.co/d/4GYH1ec) control.
 
 ![Addept Mecanum Car Kit + Joystick](imgs/Adeept_mecanum_car_+_joystick.png)
 
@@ -106,14 +106,14 @@ sending Hello from Peripheral! 18
 Peripheral sent: Hello from Peripheral! 18, response Got it
 ```
 * The values on these two screens were captured with a single photo, so they are simultaneous.
-* How is the client able to have already received count = 21, when the server has only managed to send up to 18? It looks like there may be some latency issues.
-* Moreover, these scripts aren't really clarifying what is going on relative to my goal, which is to send joystk axis values from client to server as a *request*.
+* One might wonder how is the client able to have already received count = 21, when the server has only managed to send up to 18?
+* But more importantly, these scripts aren't really clarifying what is going on relative to my goal, which is to send joystk axis values from client to server as a *request*.
 * The client script is only telling me what it has received. That's not helpful.
 * The server only tells us what it is sending. Again, who cares?
 * We occasionally see a "Got it". Is that a response?
     * If it is a response, isn't the server supposed to receive that? Why is it being received by the client?
 
-### Summarizing the problem:
+### To summarize:
 * In Kevin's [tutorial](https://www.kevsrobots.com/blog/two-way-bluetooth.html), Step 3 Sending and receiving data, he says:
     * The Central sends messages to the peripheral and
     * The Peripheral receives messages and can respond.
@@ -130,10 +130,29 @@ Peripheral sent: Hello from Peripheral! 18, response Got it
         * Finally, the client could send a *response* back to the robot. Definitely not needed here.
 
 ### The path forward:
-* Stop trying to get the Client to send joystick data to the Server
-* Instead, let the joystick be the server and the robot be the client
-    * Joystick is still connected to pico_a, but role is changed to *Peripheral*
-    * Change pico_b role to *Central*
+* Kevin's tutorial will work great for sending joystick data to the robot, if we let the joystick be the server and the robot be the client.
+* So here's my set-up:
+    * I already have the joystick connected to pico_a, so I just need to change its role to *Peripheral*.
+    * I have pico_b on the robot so its role is changed to *Central*.
+    * Now it's easy-peasy to send joystick X, Y, Z values to the robot.
 
 ![Thonny screenshot](imgs/thonny-screenshot.png)
 
+### How the Mecanum wheels work
+* The image below shows the Adeept Mecanum Wheel Car overlaid on a diagram showing its *natural* X & Y axes.
+    * If wheels 1 & 3 are driven forward, the car will move in the X direction. The rollers on wheels 2 & 4 will spin freely to allow this.
+    * If wheels 2 & 4 are driven forward, the car will move in the Y direction. The rollers on wheels 1 & 3 will spin freely to allow this.
+    * If the right wheels are dirven forward and the left wheels are driven backward, the car will spin in place CCW.
+    * These 3 degrees of freedom are independent, allowing them be combined (superimposed) in any proportion. This allows the car to move gracefully in any direction, fast or slow, while also spinning about its axis, either CW or CCW.
+
+![Natural Axes of Mecanum Wheel Car](imgs/mecanum_car_axes.jpeg)
+
+* A 3-axis joystick, such as the one shown below, is a very *intuitive* interface for controlling the mecanum wheel car. In addition to the X & Y axes, the joystick has a knob that can be twisted (in theta-Z).
+
+![Joystick Axes](imgs/joystick_axes.jpeg)
+
+* To make the joystick even more intuitive, it can be arranged to have the Joystick Y axis aligned in the same direction as the front of the car. This can be accomplished quite simply by doing the following:
+    1. Convert the joystick X, Y coordinates to polar coordinates (R, theta).
+    2. Subtract pi/4 from theta.
+    3. Convert back to rectangular coordinates.
+    4. Send the new coordinates to the robot.

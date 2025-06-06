@@ -1,6 +1,5 @@
 # pico_b_robot.py (aka main.py)
 
-
 import aioble
 import bluetooth
 import asyncio

@@ -1,19 +1,20 @@
-# pico_b_robot.py (aka main.py)
-
+# pico_a_joystk.py (aka main.py)
 
 import aioble
-import bluetooth
 import asyncio
+import bluetooth
+from machine import Pin, ADC
+from math import pi
 import struct
 from sys import exit
-from pico_car import Motor
+from geom2d import r2p, p2r
 
 # Define UUIDs for the service and characteristic
 _SERVICE_UUID = bluetooth.UUID(0x1848)
 _CHARACTERISTIC_UUID = bluetooth.UUID(0x2A6E)
 
 # IAM = "Central" # Change to 'Peripheral' or 'Central'
-IAM = "Central"
+IAM = "Peripheral"
 
 if IAM not in ['Peripheral','Central']:
     print("IAM must be either Peripheral or Central")
@@ -36,72 +37,28 @@ BLE_SCAN_LENGTH = 5000
 BLE_INTERVAL = 30000
 BLE_WINDOW = 30000
 
-# state variables
-joyvals = (0, 0, 0)
+adc_x = ADC(Pin(26))
+adc_y = ADC(Pin(27))
+adc_z = ADC(Pin(28))
 
-##### Motor control code #####
-
-# Use the Motor class provided by Adeept
-motor = Motor()
-
-# individual motors
-m1 = motor.motor_left_front
-m2 = motor.motor_right_front
-m3 = motor.motor_right_back
-m4 = motor.motor_left_back
-
-def mtr1(spd):
-    """Run motor1 at spd (int) from -100 to 100"""
-    if spd < 0:  # backward
-        direction = -1
-    else:  # forward
-        direction = 1
-    m1(1, direction, abs(spd))
-
-def mtr2(spd):
-    """Run motor2 at spd (int) from -100 to 100"""
-    if spd < 0:  # backward
-        direction = -1
-    else:  # forward
-        direction = 1
-    m2(1, direction, abs(spd))
-
-def mtr3(spd):
-    """Run motor3 at spd (int) from -100 to 100"""
-    if spd < 0:  # backward
-        direction = -1
-    else:  # forward
-        direction = 1
-    m3(1, direction, abs(spd))
-
-def mtr4(spd):
-    """Run motor4 at spd (int) from -100 to 100"""
-    if spd < 0:  # backward
-        direction = -1
-    else:  # forward
-        direction = 1
-    m4(1, direction, abs(spd))
-
-def drive_motors(joyvals):
-    jsx, jsy, jsz = joyvals
-    x = jsx * 10
-    y = jsy * 10
-    z = jsz * 5
-
-    m1_spd = x-z
-    m2_spd = y+z
-    m3_spd = x+z
-    m4_spd = y-z
-
-    mtr1(m1_spd)
-    mtr2(m2_spd)
-    mtr3(m3_spd)
-    mtr4(m4_spd)
+def read_joystk():
+    # get joystick axis values
+    js_x = adc_x.read_u16()
+    js_y = adc_y.read_u16()
+    js_z = adc_z.read_u16()
     
-    print(m1_spd, m2_spd, m3_spd, m4_spd)
+    # convert u16 values to values between -10 and +10
+    x = js_x * (20 / 65535.0) - 10
+    y = js_y * (20 / 65535.0) - 10
+    z = js_z * (20 / 65535.0) - 10
 
-##### End of motor code #####
-
+    # rotate joystick by 45 degrees
+    r, theta = r2p(x, y)
+    theta -= pi/4
+    x, y = p2r(r, theta)
+    
+    return round(x), round(y), round(z)
+    
 def encode_message(message):
     """ Encode a message to bytes """
     return message.encode('utf-8')
@@ -112,7 +69,6 @@ def decode_message(message):
 
 async def send_data_task(connection, characteristic):
     """ Send data to the connected device """
-    global joyvals
     while True:
         if not connection:
             print("error - no connection in send data")
@@ -121,8 +77,9 @@ async def send_data_task(connection, characteristic):
         if not characteristic:
             print("error no characteristic provided in send data")
             continue
-
-        message = f"{MESSAGE} Got joyvals = {joyvals}"
+        
+        x, y, z = read_joystk()
+        message = f"{x}, {y}, {z}"
         print(f"sending {message}")
 
         try:
@@ -132,7 +89,7 @@ async def send_data_task(connection, characteristic):
             await asyncio.sleep(0.1)
             response = decode_message(characteristic.read())
 
-            print(f"{IAM} sent: {message}, response {response}")
+            #print(f"{IAM} sent: {message}, response {response}")
         except Exception as e:
             print(f"writing error {e}")
             continue
@@ -141,19 +98,13 @@ async def send_data_task(connection, characteristic):
 
 async def receive_data_task(characteristic):
     """ Receive data from the connected device """
-    global joyvals
     while True:
         try:
             data = await characteristic.read()
 
             if data:
-                joyvals_string = decode_message(data)
-                joy_string_list = joyvals_string.split(',')
-                joyvals = [int(str_val) for str_val in joy_string_list]
-                print(joyvals)
-                drive_motors(joyvals)
                 print(f"{IAM} received: {decode_message(data)}")
-                #await characteristic.write(encode_message(f"Got {joyvals}"))
+                await characteristic.write(encode_message("Got it"))
                 await asyncio.sleep(0.1)
 
         except asyncio.TimeoutError:
@@ -161,7 +112,7 @@ async def receive_data_task(characteristic):
             break
         except Exception as e:
             print(f"Error receiving data: {e}")
-            continue
+            break
 
 async def run_peripheral_mode():
     """ Run the peripheral mode """
@@ -252,7 +203,6 @@ async def run_central_mode():
 
 async def main():
     """ Main function """
-    motor.motor_stop()
     while True:
         if IAM == "Central":
             tasks = [
